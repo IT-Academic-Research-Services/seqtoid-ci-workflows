@@ -1,0 +1,124 @@
+name: security (reusable)
+
+# Reusable security-scanning workflow — the SINGLE SOURCE OF TRUTH for IaC/security gating across the
+# platform repos (CZID-310). Callers add a thin wrapper (see README) so every repo scans identically:
+#   - gitleaks : secret scanning over git history (hard-fail on any leak)
+#   - trivy    : vuln + IaC misconfig (hard-fail on HIGH/CRITICAL; per-repo exceptions in .trivyignore).
+#                Secret scanning is gitleaks' job, not trivy's (avoids redundancy + a slow secret-scan hang).
+#   - tflint   : OpenTofu/Terraform lint (hard-fail on errors; warnings reported)
+#   - checkov  : deep IaC policy pass — OPT-IN via run_checkov. Report-only (soft-fail).
+# When called, the jobs check out the CALLER's repo, so .trivyignore is read from the caller (per-repo
+# baseline, per CZID-264: accept inherited, hard-fail on NEW). Pin callers to a tag (e.g. @v1).
+#
+# `prepare`: an optional caller command run before tflint + checkov (NOT trivy — trivy scans source, and
+# the codegen pulls in build artifacts). Repos whose config is only complete after codegen (e.g. lambda
+# packaging that generates variable declarations) pass it here. Repos with no codegen pass nothing.
+
+on:
+  workflow_call:
+    inputs:
+      run_checkov:
+        description: "Also run the full Checkov policy pass (full-suite / prod check)"
+        type: boolean
+        default: false
+      prepare:
+        description: "Optional shell command run before the IaC scans (e.g. codegen)."
+        type: string
+        default: ""
+      trivy_scanners:
+        description: >
+          Which trivy scanners to run (default: vuln,misconfig). Set to 'vuln' for repos whose
+          full-tree terraform misconfig resolution is pathologically slow (large multi-env module
+          graphs) — IaC misconfig is still covered by tflint and checkov.
+        type: string
+        default: "vuln,misconfig"
+      checkov_soft_fail:
+        description: >
+          Checkov report-only (true, default) vs. a real gate (false → hard-fail on findings not in
+          checkov_baseline). Flip to false once a repo has a complete .checkov.baseline (CZID-264).
+        type: boolean
+        default: true
+      checkov_baseline:
+        description: "Path to a .checkov.baseline (accept inherited findings; gate on NEW only). Empty = no baseline."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          VER=8.21.2
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+      - name: Scan git history for secrets
+        run: gitleaks git . --redact --no-banner --exit-code 1
+
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12 # fail fast instead of hanging on a slow/rate-limited DB pull
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Log in to ghcr.io
+        # Authenticated pulls of trivy's vuln-DB + policy bundles avoid the anonymous ghcr.io rate
+        # limit, which otherwise stalls the DB download and hangs the job (seen on cypherid-web-infra).
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # NO prepare here on purpose: trivy scans SOURCE. Running the caller's codegen would pull build
+      # artifacts (node_modules, lambda zips) into the scan and flag their deps. tflint/checkov get prepare.
+      # scanners = vuln,misconfig only — NOT secret. The gitleaks job owns secret scanning (history-aware,
+      # hard-fail). Trivy's secret scanner is redundant with it and is very slow on string-heavy files
+      # (e.g. embedded CloudWatch-dashboard JSON), which can hang the job.
+      - name: Trivy (vuln + misconfig)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: ${{ inputs.trivy_scanners }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: 1
+
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare (caller codegen, if any)
+        if: ${{ inputs.prepare != '' }}
+        shell: bash
+        run: ${{ inputs.prepare }}
+      - uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: latest
+      - run: tflint --recursive --minimum-failure-severity=error --format compact
+
+  checkov:
+    if: ${{ inputs.run_checkov }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare (caller codegen, if any)
+        if: ${{ inputs.prepare != '' }}
+        shell: bash
+        run: ${{ inputs.prepare }}
+      - uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: ${{ inputs.checkov_soft_fail }}
+          baseline: ${{ inputs.checkov_baseline }}
+          output_format: cli
