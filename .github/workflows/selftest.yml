@@ -1,0 +1,24 @@
+name: selftest (dogfood)
+
+# Runs this repo's OWN reusable workflows against its own content, so the SSOT can't ship a broken
+# gate. A `v1` release/move should be gated on this passing (see docs/DESIGN.md section 4).
+on:
+  pull_request:
+  push:
+    branches: [main, integration]
+  merge_group:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  security:
+    uses: ./.github/workflows/security.yml
+    with:
+      run_checkov: false
+  terraform:
+    uses: ./.github/workflows/terraform-ci.yml
+    with:
+      fmt_path: selftest/tf
+      stacks: selftest/tf

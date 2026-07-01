@@ -1,0 +1,10 @@
+# Trivy ignore baseline for seqtoid-ci-workflows (the CI SSOT itself).
+# CZID-264 model: accept inherited findings here, hard-fail on NEW. Each entry is triaged + justified.
+
+# --- flake8-action/package-lock.json : undici 5.29.0 (transitive) — 3x HIGH ---
+# All three are undici WebSocket Denial-of-Service CVEs. flake8-action is a CLI wrapper around the
+# `flake8` Python linter; it opens no WebSocket connections, so these are not exploitable in context.
+# Inherited when the action was collapsed in. Real fix (bump undici) tracked in #415.
+CVE-2026-12151
+CVE-2026-1526
+CVE-2026-2229

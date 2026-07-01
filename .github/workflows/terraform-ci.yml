@@ -44,7 +44,7 @@ jobs:
   terraform-ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
       - name: Fetch git module sources over HTTPS (public modules; CI has no SSH key)
@@ -52,7 +52,7 @@ jobs:
           git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
           git config --global url."https://github.com/".insteadOf "git@github.com:"
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
           terraform_wrapper: false
@@ -87,14 +87,14 @@ jobs:
           }
           if [ -n "$VALIDATE_COMMAND" ]; then
             bash -c "$VALIDATE_COMMAND"
-            [ "$CHECK_LOCKFILE" = "true" ] && check_lock "."
+            if [ "$CHECK_LOCKFILE" = "true" ]; then check_lock "."; fi
           elif [ -n "$STACKS" ]; then
             while IFS= read -r stack; do
               [ -z "$stack" ] && continue
               echo "== validate $stack =="
               terraform -chdir="$stack" init -backend=false -input=false
               terraform -chdir="$stack" validate
-              [ "$CHECK_LOCKFILE" = "true" ] && check_lock "$stack"
+              if [ "$CHECK_LOCKFILE" = "true" ]; then check_lock "$stack"; fi
             done <<< "$STACKS"
           else
             echo "::error::provide either 'stacks' or 'validate_command'"; exit 1

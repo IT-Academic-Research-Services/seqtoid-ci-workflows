@@ -40,7 +40,7 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
       - name: Install gitleaks
@@ -58,11 +58,11 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Log in to ghcr.io
         # Authenticated pulls of trivy's vuln-DB + policy bundles avoid the anonymous ghcr.io rate
         # limit, which otherwise stalls the DB download and hangs the job (seen on cypherid-web-infra).
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -73,7 +73,7 @@ jobs:
       # hard-fail). Trivy's secret scanner is redundant with it and is very slow on string-heavy files
       # (e.g. embedded CloudWatch-dashboard JSON), which can hang the job.
       - name: Trivy (vuln + misconfig)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -86,12 +86,12 @@ jobs:
   tflint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Prepare (caller codegen, if any)
         if: ${{ inputs.prepare != '' }}
         shell: bash
         run: ${{ inputs.prepare }}
-      - uses: terraform-linters/setup-tflint@v6
+      - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
         with:
           tflint_version: latest
       - run: tflint --recursive --minimum-failure-severity=error --format compact
@@ -100,12 +100,12 @@ jobs:
     if: ${{ inputs.run_checkov }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Prepare (caller codegen, if any)
         if: ${{ inputs.prepare != '' }}
         shell: bash
         run: ${{ inputs.prepare }}
-      - uses: bridgecrewio/checkov-action@v12
+      - uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f # v12
         with:
           directory: .
           framework: terraform
