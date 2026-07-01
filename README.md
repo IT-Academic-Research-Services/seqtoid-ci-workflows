@@ -69,3 +69,9 @@ jobs:
 
 Pin to `@v1` (a moving major tag). Breaking changes bump the major. Renovate keeps the pinned tool/action
 versions inside the reusable current.
+
+## Actions
+
+- **`flake8-action/`** — Python flake8 linter action (collapsed in from the standalone
+  `thorvath-slower/flake8-action` repo). Consume as
+  `uses: thorvath-slower/ci-workflows/flake8-action@<ref>`.
