@@ -78,3 +78,8 @@ versions inside the reusable current.
 - **`flake8-action/`** — Python flake8 linter action (collapsed in from the standalone
   `thorvath-slower/flake8-action` repo). Consume as
   `uses: thorvath-slower/seqtoid-ci-workflows/flake8-action@v1`.
+
+## Design & policy
+
+How this SSOT works, the `@v1` moving-tag propagation model, hardening, and the
+exception list: [`docs/DESIGN.md`](docs/DESIGN.md) — the authoritative reference.
