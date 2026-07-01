@@ -1,0 +1,3 @@
+# Trivy ignore baseline for seqtoid-ci-workflows (the CI SSOT itself).
+# CZID-264 model: accept inherited findings here, hard-fail on NEW. Add CVE/rule IDs (one per line)
+# with a short justification when a finding is triaged and accepted. Empty = nothing accepted yet.
