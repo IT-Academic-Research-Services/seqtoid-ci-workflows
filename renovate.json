@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "pinDigests": true,
+  "packageRules": [
+    {
+      "description": "Third-party actions inside the reusable workflows are the SSOT's only external dependency; keep them current in this one place.",
+      "matchManagers": ["github-actions"],
+      "groupName": "ci-ssot third-party actions"
+    }
+  ]
+}
