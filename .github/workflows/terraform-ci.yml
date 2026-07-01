@@ -13,7 +13,8 @@ name: terraform-ci (reusable)
 #   validate_command  - custom validate, used INSTEAD of `stacks` (e.g. `make validate`, or codegen+root validate)
 #   prepare           - optional shell run before fmt (codegen / env setup)
 #   check_lockfile    - fail if .terraform.lock.hcl drifted during init (provider-pin gate, CZID-30)
-#   terraform_version - Terraform version for hashicorp/setup-terraform (default "latest")
+#   terraform_version      - explicit Terraform version for setup-terraform (default "latest")
+#   terraform_version_file - version file to read when terraform_version is "latest" (default ".terraform-version")
 
 on:
   workflow_call:
@@ -36,6 +37,9 @@ on:
       terraform_version:
         type: string
         default: "latest"
+      terraform_version_file:
+        type: string
+        default: ".terraform-version"
 
 permissions:
   contents: read
@@ -51,10 +55,22 @@ jobs:
         run: |
           git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
           git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - name: Resolve Terraform version
+        id: tfver
+        # Prefer an explicit terraform_version input; else read the version file (SSOT, e.g.
+        # .terraform-version); else "latest". Lets callers keep their pinned version by file.
+        run: |
+          if [ -n "${{ inputs.terraform_version }}" ] && [ "${{ inputs.terraform_version }}" != "latest" ]; then
+            echo "version=${{ inputs.terraform_version }}" >> "$GITHUB_OUTPUT"
+          elif [ -f "${{ inputs.terraform_version_file }}" ]; then
+            echo "version=$(cat "${{ inputs.terraform_version_file }}")" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=latest" >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
-          terraform_version: ${{ inputs.terraform_version }}
+          terraform_version: ${{ steps.tfver.outputs.version }}
           terraform_wrapper: false
       - name: terraform fmt -check
         # Runs on committed files BEFORE prepare, so codegen output (variables.tf, chalice.tf.json, …)
