@@ -1,16 +1,19 @@
-name: tofu-ci (reusable)
+name: terraform-ci (reusable)
 
-# Reusable OpenTofu fmt + validate gate — the SSOT for the IaC correctness gate across the platform repos
-# (CZID-310). Callers add a thin wrapper (see README). Pure correctness: validate runs -backend=false, so no
-# cloud creds or remote state are touched — safe on every PR. Pin callers to a tag (e.g. @v1).
+# Reusable Terraform fmt + validate gate — the SSOT for the IaC correctness gate across the platform repos
+# (CZID-310). Callers add a thin wrapper (see README) and pin to a tag (e.g. @v1) so a single change here
+# rolls out to every repo. Pure correctness: validate runs -backend=false, so no cloud creds or remote
+# state are touched — safe on every PR.
+#
+# (Converted from the earlier OpenTofu gate — the platform reverted OpenTofu -> native Terraform, #370.)
 #
 # Inputs let each repo express its shape without forking the gate:
-#   fmt_path          - what to `tofu fmt -check -recursive` (default ".")
+#   fmt_path          - what to `terraform fmt -check -recursive` (default ".")
 #   stacks            - newline-separated stack dirs; each gets init(-backend=false)+validate (matrix-free)
 #   validate_command  - custom validate, used INSTEAD of `stacks` (e.g. `make validate`, or codegen+root validate)
 #   prepare           - optional shell run before fmt (codegen / env setup)
 #   check_lockfile    - fail if .terraform.lock.hcl drifted during init (provider-pin gate, CZID-30)
-#   tofu_version_file - file pinning the OpenTofu version (default ".opentofu-version")
+#   terraform_version - Terraform version for hashicorp/setup-terraform (default "latest")
 
 on:
   workflow_call:
@@ -30,15 +33,15 @@ on:
       check_lockfile:
         type: boolean
         default: false
-      tofu_version_file:
+      terraform_version:
         type: string
-        default: ".opentofu-version"
+        default: "latest"
 
 permissions:
   contents: read
 
 jobs:
-  tofu-ci:
+  terraform-ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -48,20 +51,20 @@ jobs:
         run: |
           git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
           git config --global url."https://github.com/".insteadOf "git@github.com:"
-      - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v2
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          tofu_version_file: ${{ inputs.tofu_version_file }}
-          tofu_wrapper: false
-      - name: tofu fmt -check
+          terraform_version: ${{ inputs.terraform_version }}
+          terraform_wrapper: false
+      - name: terraform fmt -check
         # Runs on committed files BEFORE prepare, so codegen output (variables.tf, chalice.tf.json, …)
         # is never formatting-gated.
-        run: tofu fmt -check -recursive ${{ inputs.fmt_path }}
+        run: terraform fmt -check -recursive ${{ inputs.fmt_path }}
       - name: Prepare (codegen / setup, if any)
         if: ${{ inputs.prepare != '' }}
         shell: bash
         run: ${{ inputs.prepare }}
-      - name: tofu validate (+ optional per-stack lockfile gate, CZID-30)
+      - name: terraform validate (+ optional per-stack lockfile gate, CZID-30)
         shell: bash
         env:
           VALIDATE_COMMAND: ${{ inputs.validate_command }}
@@ -76,10 +79,10 @@ jobs:
             local d="$1" f
             [ "$d" = "." ] && f=".terraform.lock.hcl" || f="$d/.terraform.lock.hcl"
             if [ ! -f "$f" ]; then
-              echo "::error::$f is missing — run 'tofu providers lock ...' in '$d' and commit it."; exit 1
+              echo "::error::$f is missing — run 'terraform providers lock ...' in '$d' and commit it."; exit 1
             fi
             if ! git diff --exit-code -- "$f"; then
-              echo "::error::$f drifted during init — re-run 'tofu providers lock' in '$d' and commit it."; exit 1
+              echo "::error::$f drifted during init — re-run 'terraform providers lock' in '$d' and commit it."; exit 1
             fi
           }
           if [ -n "$VALIDATE_COMMAND" ]; then
@@ -89,8 +92,8 @@ jobs:
             while IFS= read -r stack; do
               [ -z "$stack" ] && continue
               echo "== validate $stack =="
-              tofu -chdir="$stack" init -backend=false -input=false
-              tofu -chdir="$stack" validate
+              terraform -chdir="$stack" init -backend=false -input=false
+              terraform -chdir="$stack" validate
               [ "$CHECK_LOCKFILE" = "true" ] && check_lock "$stack"
             done <<< "$STACKS"
           else

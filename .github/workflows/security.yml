@@ -5,7 +5,7 @@ name: security (reusable)
 #   - gitleaks : secret scanning over git history (hard-fail on any leak)
 #   - trivy    : vuln + IaC misconfig (hard-fail on HIGH/CRITICAL; per-repo exceptions in .trivyignore).
 #                Secret scanning is gitleaks' job, not trivy's (avoids redundancy + a slow secret-scan hang).
-#   - tflint   : OpenTofu/Terraform lint (hard-fail on errors; warnings reported)
+#   - tflint   : Terraform lint (hard-fail on errors; warnings reported)
 #   - checkov  : deep IaC policy pass — OPT-IN via run_checkov. Report-only (soft-fail).
 # When called, the jobs check out the CALLER's repo, so .trivyignore is read from the caller (per-repo
 # baseline, per CZID-264: accept inherited, hard-fail on NEW). Pin callers to a tag (e.g. @v1).
