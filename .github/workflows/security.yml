@@ -42,6 +42,14 @@ on:
         description: "Path to a .checkov.baseline (accept inherited findings; gate on NEW only). Empty = no baseline."
         type: string
         default: ""
+      checkov_skip_path:
+        description: "Comma/newline paths to skip in checkov (e.g. vendored third-party modules). Empty = none."
+        type: string
+        default: ""
+      trivy_skip_dirs:
+        description: "Comma-separated dirs to skip in trivy (e.g. vendored third-party modules). Empty = none."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -84,6 +92,8 @@ jobs:
       # (e.g. embedded CloudWatch-dashboard JSON), which can hang the job.
       - name: Trivy (vuln + misconfig)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_SKIP_DIRS: ${{ inputs.trivy_skip_dirs }}
         with:
           scan-type: fs
           scan-ref: .
@@ -121,4 +131,5 @@ jobs:
           framework: terraform
           soft_fail: ${{ inputs.checkov_soft_fail }}
           baseline: ${{ inputs.checkov_baseline }}
+          skip_path: ${{ inputs.checkov_skip_path }}
           output_format: cli
