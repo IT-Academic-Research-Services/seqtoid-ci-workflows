@@ -1,6 +1,6 @@
 # ci-workflows — shared reusable CI workflows
 
-The single source of truth for cross-repo CI gating on the platform (CZID-310). Instead of each repo
+The single source of truth for cross-repo CI gating on the platform. Instead of each repo
 carrying its own copy of the same scan (which drifts), every repo calls the reusable workflow here. One
 definition, updated once, used everywhere.
 
@@ -33,12 +33,12 @@ jobs:
 ```
 
 - The reusable's jobs check out the **caller's** repo, so each repo keeps its own **`.trivyignore`** baseline
-  (CZID-264: accept inherited findings, hard-fail on NEW).
+  (accept inherited findings, hard-fail on NEW).
 - Public repo, so any platform repo (public or private) can call it without an org-access setting.
 
 ### `tofu-ci.yml` — reusable OpenTofu fmt + validate gate
 `tofu fmt -check` + per-stack (or custom) `tofu validate -backend=false` + optional codegen + optional
-per-stack provider-lockfile pin (CZID-30). Pure correctness — no cloud creds / remote state.
+per-stack provider-lockfile pin. Pure correctness — no cloud creds / remote state.
 
 **Call it from a repo** (`.github/workflows/tofu-ci.yml`):
 

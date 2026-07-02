@@ -32,6 +32,16 @@ on:
           graphs) — IaC misconfig is still covered by tflint and checkov.
         type: string
         default: "vuln,misconfig"
+      checkov_soft_fail:
+        description: >
+          Checkov report-only (true, default) vs. a real gate (false → hard-fail on findings not in
+          checkov_baseline). Flip to false once a repo has a complete .checkov.baseline (CZID-264).
+        type: boolean
+        default: true
+      checkov_baseline:
+        description: "Path to a .checkov.baseline (accept inherited findings; gate on NEW only). Empty = no baseline."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -109,5 +119,6 @@ jobs:
         with:
           directory: .
           framework: terraform
-          soft_fail: true
+          soft_fail: ${{ inputs.checkov_soft_fail }}
+          baseline: ${{ inputs.checkov_baseline }}
           output_format: cli
