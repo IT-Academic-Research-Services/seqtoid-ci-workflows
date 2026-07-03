@@ -128,6 +128,13 @@ jobs:
       - uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f # v12
         with:
           directory: .
+          # SSOT: pin the checkov engine (#425). The action otherwise pip-installs
+          # the LATEST checkov at run time, so the `.checkov.baseline` gate was
+          # non-reproducible — a floating engine finds a different finding set than
+          # the version the baseline was built against (version-parity drift).
+          # 3.3.6 is the current line and matches the committed baselines. Bump
+          # deliberately (pin + regenerate baselines together).
+          checkov_version: "3.3.6"
           framework: terraform
           soft_fail: ${{ inputs.checkov_soft_fail }}
           baseline: ${{ inputs.checkov_baseline }}
