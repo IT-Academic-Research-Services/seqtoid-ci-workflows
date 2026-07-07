@@ -55,7 +55,9 @@ jobs:
           fetch-depth: 0
       - name: Install gitleaks
         run: |
-          VER=8.21.2
+          # 8.30.1: clears a false-positive hashicorp-tf-password on `password_policy = "excellent"`
+          # (the string "excellent" tripped the old rule) surfaced rolling out improvement-#010 (CZID-98).
+          VER=8.30.1
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
       - name: Scan git history for secrets
@@ -104,6 +106,14 @@ jobs:
       - uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: latest
+      # setup-tflint installs the binary but NOT the ruleset plugins — `tflint --init` is a required
+      # separate step (per the action's docs). Without it a recursive run silently skips any plugin
+      # rules (e.g. a caller's aws ruleset in .tflint.hcl) or errors outright: the "tflint module-
+      # resolution" gap from CZID-98. GITHUB_TOKEN avoids the plugin-download rate limit.
+      - name: Init TFLint plugins
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: tflint --recursive --minimum-failure-severity=error --format compact
 
   checkov:
