@@ -105,7 +105,10 @@ jobs:
         run: ${{ inputs.prepare }}
       - uses: terraform-linters/setup-tflint@v6
         with:
-          tflint_version: latest
+          # Pinned (not `latest`) so the lint gate is reproducible and can't drift
+          # under callers -- this is the SSOT pin for tflint (CZID-140 D8). Renovate
+          # bumps it; pull forward, never back.
+          tflint_version: v0.63.1
       # setup-tflint installs the binary but NOT the ruleset plugins — `tflint --init` is a required
       # separate step (per the action's docs). Without it a recursive run silently skips any plugin
       # rules (e.g. a caller's aws ruleset in .tflint.hcl) or errors outright: the "tflint module-
