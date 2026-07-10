@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Group the @actions/* toolkit bumps into one PR",
+      "matchPackageNames": ["@actions/**"],
+      "groupName": "actions toolkit"
+    },
+    {
+      "description": "@actions/core>=2, @actions/exec>=3, @actions/github>=6 require an ESM migration of index.js + the ncc build before the committed dist/ can be rebuilt. Hold the majors until that migration lands; minors/patches flow normally.",
+      "matchPackageNames": ["@actions/core", "@actions/exec", "@actions/github"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ],
+  "postUpdateOptions": ["npmDedupe"]
+}

@@ -1,0 +1,28 @@
+name: python-flake8
+description: "Run flake8 python code linting"
+branding:
+  icon: check-circle
+  color: green
+inputs:
+  checkName:
+    description: "The name of the check to add annotations to.
+      Generally the same as the job that uses this action"
+    required: true
+  path:
+    description: "Path to use for flake8"
+    default: "."
+    required: false
+  plugins:
+    description: "Package names of flake8 plugins passed on to the `pip install` command."
+    default: ""
+    required: false
+  config:
+    description: "Specify a config file for flake8"
+    required: false
+  isTest:
+    description: "Used for internal tests"
+    default: "false"
+    required: false
+runs:
+  using: "node24"
+  main: "dist/index.js"
