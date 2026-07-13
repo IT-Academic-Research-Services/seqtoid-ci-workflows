@@ -1,0 +1,102 @@
+name: regression-gate (reusable)
+
+# Reusable REGRESSION gate — the per-repo half of the main-merge no-regressions guard.
+# A green "all tests pass" can still hide a suite that silently SHRANK (deleted/skipped tests),
+# coverage that SLID, or policy checks that were SUPPRESSED. This gate re-measures the candidate
+# and HARD-FAILS if a monotonic-up metric dropped below the repo's committed baseline.
+#
+# The metric-extraction + compare logic is the single source of truth in seqtoid-ssot-infra's
+# platform-harness (lib/metrics.sh + bin/regression-compare.sh) — this workflow just runs the
+# caller's suite and calls it. Callers add a thin wrapper on their `integration→main` PRs and
+# commit a `.regression-baseline.json` captured on a green main. Pin callers to a tag (e.g. @v1).
+#
+#   App repo (seqtoid-web):  suite_command "make ci-local", coverage_file coverage/.last_run.json
+#   Infra repo:              measure_checkov true, checkov_dir terraform
+# Re-bless after an intentional change: re-run capture-baseline on the new green main + commit it.
+
+on:
+  workflow_call:
+    inputs:
+      suite_command:
+        description: "Command that runs the repo's full suite; its stdout is parsed for RSpec/Jest counts. Empty = skip suite metrics."
+        type: string
+        default: ""
+      baseline_file:
+        description: "Path (in the caller repo) to the committed regression baseline."
+        type: string
+        default: ".regression-baseline.json"
+      coverage_file:
+        description: "SimpleCov last-run artifact to read line-coverage from. Empty = skip coverage."
+        type: string
+        default: ""
+      measure_checkov:
+        description: "Infra repos: compare the checkov passed-count (+ terraform inventory, informational)."
+        type: boolean
+        default: false
+      checkov_dir:
+        description: "Directory checkov scans for the passed-count metric."
+        type: string
+        default: "terraform"
+      coverage_tolerance:
+        description: "Allowed line-coverage slip (percentage points) before it's a regression."
+        type: string
+        default: "0.5"
+      harness_repo:
+        description: "Repo providing the platform-harness metric library."
+        type: string
+        default: "thorvath-slower/seqtoid-ssot-infra"
+      harness_ref:
+        description: "Ref of the harness repo to pin (tag/branch/sha). Pin to a tag once cut."
+        type: string
+        default: "main"
+      runs_on:
+        description: "Runner label."
+        type: string
+        default: "ubuntu-latest"
+
+jobs:
+  regression:
+    runs-on: ${{ inputs.runs_on }}
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout platform-harness (metric library — single source of truth)
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.harness_repo }}
+          ref: ${{ inputs.harness_ref }}
+          path: .platform-harness-src
+          fetch-depth: 1
+
+      - name: Sanity — baseline present
+        run: |
+          if [ ! -f "${{ inputs.baseline_file }}" ]; then
+            echo "::error::No regression baseline at ${{ inputs.baseline_file }}. Capture one on a green main:"
+            echo "::error::  seqtoid-ssot-infra/platform-harness/capture-baseline.sh, commit the repo-scoped metrics."
+            exit 1
+          fi
+          command -v jq >/dev/null 2>&1 || { sudo apt-get update -y && sudo apt-get install -y jq; }
+
+      - name: Run suite (captured for count metrics)
+        if: ${{ inputs.suite_command != '' }}
+        run: |
+          set -o pipefail
+          # Tee the suite output; keep going even if the suite fails — the compare step reports the
+          # failure count as a regression, and the suite's own gate fails the run independently.
+          ${{ inputs.suite_command }} 2>&1 | tee /tmp/suite.log || echo "::warning::suite exited non-zero (regression step will report failures)"
+
+      - name: Regression compare vs baseline
+        run: |
+          HARNESS=.platform-harness-src/platform-harness
+          chmod +x "$HARNESS"/bin/regression-compare.sh
+          args=(--baseline "${{ inputs.baseline_file }}" --coverage-tol "${{ inputs.coverage_tolerance }}")
+          [ -n "${{ inputs.suite_command }}" ] && args+=(--app-log /tmp/suite.log)
+          [ -n "${{ inputs.coverage_file }}" ] && args+=(--coverage "${{ inputs.coverage_file }}")
+          if [ "${{ inputs.measure_checkov }}" = "true" ]; then
+            command -v checkov >/dev/null 2>&1 || pip install --quiet checkov==3.3.6
+            args+=(--checkov-dir "${{ inputs.checkov_dir }}" --repo .)
+          fi
+          bash "$HARNESS"/bin/regression-compare.sh "${args[@]}"

@@ -1,0 +1,25 @@
+# CI SSOT adoption manifest — the source of truth for which platform repos use which reusable(s) from
+# seqtoid-ci-workflows, and which are documented exceptions. The drift-check (.github/workflows/drift-check.yml)
+# asserts reality matches this. Update this file when a repo adopts or changes a gate. See docs/DESIGN.md.
+#
+# Per repo, each gate is one of:
+#   <gate>: <path>            -> the repo MUST have a workflow calling thorvath-slower/seqtoid-ci-workflows/<path>@...
+#   <gate>: "exception: ..."  -> intentionally kept local (reason required) — recorded, not enforced
+#   <gate>: "review: ..."     -> posture not yet decided — recorded, not enforced
+branch: integration            # which branch to inspect (adoptions live on integration until synced to main)
+repos:
+  seqtoid-ssot-infra:
+    security:     .github/workflows/security.yml
+    terraform-ci: .github/workflows/terraform-ci.yml
+  cypherid-web-infra:
+    security:  .github/workflows/security.yml
+    terraform: "exception: richer validate-stack.yml (tiered per-component validation) — uniformity would lose function"
+  cypherid-workflow-infra:
+    terraform-ci: .github/workflows/terraform-ci.yml
+    flake8:       flake8-action
+    security:     "review: confirm posture"
+  seqtoid-web:
+    security: "exception: app repo (no Terraform); app-tuned gitleaks allowlist + report-only trivy"
+    flake8:   flake8-action
+  seqtoid-workflows:
+    status: "review: no IaC/security gates yet"

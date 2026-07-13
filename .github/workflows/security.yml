@@ -5,7 +5,7 @@ name: security (reusable)
 #   - gitleaks : secret scanning over git history (hard-fail on any leak)
 #   - trivy    : vuln + IaC misconfig (hard-fail on HIGH/CRITICAL; per-repo exceptions in .trivyignore).
 #                Secret scanning is gitleaks' job, not trivy's (avoids redundancy + a slow secret-scan hang).
-#   - tflint   : OpenTofu/Terraform lint (hard-fail on errors; warnings reported)
+#   - tflint   : Terraform lint (hard-fail on errors; warnings reported)
 #   - checkov  : deep IaC policy pass — OPT-IN via run_checkov. Report-only (soft-fail).
 # When called, the jobs check out the CALLER's repo, so .trivyignore is read from the caller (per-repo
 # baseline, per CZID-264: accept inherited, hard-fail on NEW). Pin callers to a tag (e.g. @v1).
@@ -34,12 +34,20 @@ on:
         default: "vuln,misconfig"
       checkov_soft_fail:
         description: >
-          Checkov report-only (true, default) vs. a real gate (false → hard-fail on findings not in
+          Checkov report-only (true, default) vs. a real gate (false -> hard-fail on findings not in
           checkov_baseline). Flip to false once a repo has a complete .checkov.baseline (CZID-264).
         type: boolean
         default: true
       checkov_baseline:
         description: "Path to a .checkov.baseline (accept inherited findings; gate on NEW only). Empty = no baseline."
+        type: string
+        default: ""
+      checkov_skip_path:
+        description: "Comma/newline paths to skip in checkov (e.g. vendored third-party modules). Empty = none."
+        type: string
+        default: ""
+      trivy_skip_dirs:
+        description: "Comma-separated dirs to skip in trivy (e.g. vendored third-party modules). Empty = none."
         type: string
         default: ""
 
@@ -50,12 +58,14 @@ jobs:
   gitleaks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
       - name: Install gitleaks
         run: |
-          VER=8.21.2
+          # 8.30.1: clears a false-positive hashicorp-tf-password on `password_policy = "excellent"`
+          # (the string "excellent" tripped the old rule) surfaced rolling out improvement-#010 (CZID-98).
+          VER=8.30.1
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
       - name: Scan git history for secrets
@@ -68,11 +78,11 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Log in to ghcr.io
         # Authenticated pulls of trivy's vuln-DB + policy bundles avoid the anonymous ghcr.io rate
         # limit, which otherwise stalls the DB download and hangs the job (seen on cypherid-web-infra).
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -83,7 +93,9 @@ jobs:
       # hard-fail). Trivy's secret scanner is redundant with it and is very slow on string-heavy files
       # (e.g. embedded CloudWatch-dashboard JSON), which can hang the job.
       - name: Trivy (vuln + misconfig)
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_SKIP_DIRS: ${{ inputs.trivy_skip_dirs }}
         with:
           scan-type: fs
           scan-ref: .
@@ -96,29 +108,48 @@ jobs:
   tflint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Prepare (caller codegen, if any)
         if: ${{ inputs.prepare != '' }}
         shell: bash
         run: ${{ inputs.prepare }}
-      - uses: terraform-linters/setup-tflint@v6
+      - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
         with:
-          tflint_version: latest
+          # Pinned (not `latest`) so the lint gate is reproducible and can't drift
+          # under callers -- this is the SSOT pin for tflint (CZID-140 D8). Renovate
+          # bumps it; pull forward, never back.
+          tflint_version: v0.63.1
+      # setup-tflint installs the binary but NOT the ruleset plugins — `tflint --init` is a required
+      # separate step (per the action's docs). Without it a recursive run silently skips any plugin
+      # rules (e.g. a caller's aws ruleset in .tflint.hcl) or errors outright: the "tflint module-
+      # resolution" gap from CZID-98. GITHUB_TOKEN avoids the plugin-download rate limit.
+      - name: Init TFLint plugins
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - run: tflint --recursive --minimum-failure-severity=error --format compact
 
   checkov:
     if: ${{ inputs.run_checkov }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Prepare (caller codegen, if any)
         if: ${{ inputs.prepare != '' }}
         shell: bash
         run: ${{ inputs.prepare }}
-      - uses: bridgecrewio/checkov-action@v12
+      - uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f # v12
         with:
           directory: .
+          # SSOT: pin the checkov engine (#425). The action otherwise pip-installs
+          # the LATEST checkov at run time, so the `.checkov.baseline` gate was
+          # non-reproducible — a floating engine finds a different finding set than
+          # the version the baseline was built against (version-parity drift).
+          # 3.3.6 is the current line and matches the committed baselines. Bump
+          # deliberately (pin + regenerate baselines together).
+          checkov_version: "3.3.6"
           framework: terraform
           soft_fail: ${{ inputs.checkov_soft_fail }}
           baseline: ${{ inputs.checkov_baseline }}
+          skip_path: ${{ inputs.checkov_skip_path }}
           output_format: cli
