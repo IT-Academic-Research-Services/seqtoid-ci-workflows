@@ -29,7 +29,7 @@ on:
 
 jobs:
   security:
-    uses: thorvath-slower/seqtoid-ci-workflows/.github/workflows/security.yml@v1
+    uses: IT-Academic-Research-Services/seqtoid-ci-workflows/.github/workflows/security.yml@v1
     with:
       run_checkov: ${{ inputs.run_checkov || false }}
 ```
@@ -53,7 +53,7 @@ on:
 
 jobs:
   terraform-ci:
-    uses: thorvath-slower/seqtoid-ci-workflows/.github/workflows/terraform-ci.yml@v1
+    uses: IT-Academic-Research-Services/seqtoid-ci-workflows/.github/workflows/terraform-ci.yml@v1
     with:
       fmt_path: infra/          # what to `terraform fmt -check -recursive`
       check_lockfile: true      # per-stack .terraform.lock.hcl pin gate (optional)
@@ -85,7 +85,7 @@ on:
 
 jobs:
   plan-dev:
-    uses: thorvath-slower/seqtoid-ci-workflows/.github/workflows/terraform-plan.yml@v1
+    uses: IT-Academic-Research-Services/seqtoid-ci-workflows/.github/workflows/terraform-plan.yml@v1
     with:
       working_directory: terraform/envs/dev/web   # dir to init/plan in
       environment: dev                            # selects the czid-dev-gh-actions-plan role
@@ -106,7 +106,7 @@ versions inside the reusable current.
 
 - **`flake8-action/`** — Python flake8 linter action (collapsed in from the standalone
   `thorvath-slower/flake8-action` repo). Consume as
-  `uses: thorvath-slower/seqtoid-ci-workflows/flake8-action@v1`.
+  `uses: IT-Academic-Research-Services/seqtoid-ci-workflows/flake8-action@v1`.
 
 ## Design & policy
 
