@@ -68,6 +68,35 @@ jobs:
 - Repos with a more capable, repo-specific gate (e.g. cypherid-web-infra's changed-files + tiered
   validation) keep their own — uniformity only where it doesn't lose function.
 
+### `terraform-plan.yml` — reusable Terraform plan (PR diff)
+
+Shows the **plan diff on the PR** before merge/apply — the piece `terraform-ci` (fmt+validate, no
+creds) deliberately leaves out. Assumes a **read-only** OIDC role (`czid-<env>-gh-actions-plan`, or an
+override ARN), runs `terraform plan -lock=false` with **refresh ON** (so the diff reflects real drift
+vs AWS), uploads the saved `tf.plan`, and posts/updates the diff as a PR comment. Hand the saved
+`tf.plan` artifact to an apply job to apply the **exact reviewed plan** (no re-plan against live).
+
+**Call it from a repo** (`.github/workflows/terraform-plan.yml`):
+
+```yaml
+name: terraform-plan
+on:
+  pull_request:
+
+jobs:
+  plan-dev:
+    uses: thorvath-slower/seqtoid-ci-workflows/.github/workflows/terraform-plan.yml@v1
+    with:
+      working_directory: terraform/envs/dev/web   # dir to init/plan in
+      environment: dev                            # selects the czid-dev-gh-actions-plan role
+    # role_to_assume: arn:aws:iam::ACCT:role/...  # override the default role if named differently
+```
+
+- Requires the caller repo to have `AWS_ACCOUNT_ID` set as a variable (for the default role ARN) and a
+  read-only `czid-<env>-gh-actions-plan` OIDC role trusting the repo. It sets `id-token: write` +
+  `pull-requests: write` itself.
+- Not in `selftest` (it needs a live backend + role) — validated by the adopting repos' own runs.
+
 ## Versioning
 
 Pin to `@v1` (a moving major tag). Breaking changes bump the major. Renovate keeps the pinned tool/action

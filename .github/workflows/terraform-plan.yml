@@ -1,0 +1,149 @@
+name: terraform-plan (reusable)
+
+# Reusable Terraform PLAN gate — the SSOT for showing the plan DIFF on a PR before anything is
+# merged or applied. Complements terraform-ci.yml (fmt+validate, no creds): this one assumes a
+# READ-ONLY OIDC role, runs a real `terraform plan` against the live backend, uploads the saved
+# `tf.plan`, and posts the human-readable diff as a PR comment. The saved plan can then be handed to
+# an apply job (apply the exact reviewed plan, not a re-plan against live).
+#
+# Least privilege by construction: the plan role is strictly read-only (ReadOnlyAccess), so we run
+# `-lock=false` (a read-only plan never mutates state; skipping the lock keeps the role incapable of
+# any write and avoids contending with a real apply). Refresh is ON deliberately so the diff reflects
+# real drift vs AWS, not just config-vs-state.
+#
+# Inputs:
+#   working_directory - dir to `terraform init/plan` in (e.g. terraform/envs/dev/web). REQUIRED.
+#   environment       - dev|staging|prod; selects the default plan role. REQUIRED.
+#   role_to_assume    - full IAM role ARN to override the default (czid-<env>-gh-actions-plan).
+#   aws_region        - default us-west-2.
+#   init_args         - extra args for `terraform init` (e.g. -backend-config=...).
+#   terraform_version / terraform_version_file - pin like terraform-ci.yml.
+#   post_comment      - post/update the plan diff as a PR comment (default true).
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+      role_to_assume:
+        type: string
+        default: ""
+      aws_region:
+        type: string
+        default: "us-west-2"
+      init_args:
+        type: string
+        default: ""
+      terraform_version:
+        type: string
+        default: "latest"
+      terraform_version_file:
+        type: string
+        default: ".terraform-version"
+      post_comment:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write        # assume the read-only OIDC plan role
+  pull-requests: write   # post the plan diff comment
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Fetch git module sources over HTTPS (public modules; CI has no SSH key)
+        run: |
+          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+
+      - name: Resolve Terraform version
+        id: tfver
+        run: |
+          if [ -n "${{ inputs.terraform_version }}" ] && [ "${{ inputs.terraform_version }}" != "latest" ]; then
+            echo "version=${{ inputs.terraform_version }}" >> "$GITHUB_OUTPUT"
+          elif [ -f "${{ inputs.terraform_version_file }}" ]; then
+            echo "version=$(cat "${{ inputs.terraform_version_file }}")" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
+          terraform_wrapper: false
+
+      - name: Configure AWS credentials (read-only plan role via OIDC)
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v6.1.0
+        with:
+          role-to-assume: ${{ inputs.role_to_assume != '' && inputs.role_to_assume || format('arn:aws:iam::{0}:role/czid-{1}-gh-actions-plan', vars.AWS_ACCOUNT_ID, inputs.environment) }}
+          aws-region: ${{ inputs.aws_region }}
+          role-session-name: GitHub_to_AWS_via_FederatedOIDC
+
+      - name: terraform init
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform init -input=false ${{ inputs.init_args }}
+
+      - name: terraform plan
+        id: plan
+        working-directory: ${{ inputs.working_directory }}
+        # -lock=false: read-only plan role never writes state (least privilege, no lock contention with apply).
+        # refresh ON (default): diff reflects real drift vs AWS, not just config-vs-state.
+        # -detailed-exitcode: 0=no changes, 2=changes, 1=error. We capture 2 as "changes" (not a failure).
+        run: |
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color -out=tf.plan | tee plan.stdout
+          code=${PIPESTATUS[0]}
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "1" ]; then exit 1; fi
+          terraform show -no-color tf.plan > plan.txt
+          terraform show -json tf.plan > plan.json
+          exit 0
+
+      - name: Upload saved plan (consumed by apply)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tf.plan-${{ inputs.environment }}
+          path: |
+            ${{ inputs.working_directory }}/tf.plan
+            ${{ inputs.working_directory }}/plan.json
+          retention-days: 5
+
+      - name: Post plan diff as PR comment
+        if: ${{ inputs.post_comment && github.event_name == 'pull_request' }}
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          PLAN_DIR: ${{ inputs.working_directory }}
+          TF_ENV: ${{ inputs.environment }}
+          PLAN_CODE: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = `<!-- terraform-plan:${process.env.TF_ENV}:${process.env.PLAN_DIR} -->`;
+            let body = fs.readFileSync(`${process.env.PLAN_DIR}/plan.txt`, 'utf8');
+            const LIMIT = 60000;
+            if (body.length > LIMIT) body = body.slice(0, LIMIT) + '\n... (truncated; see the tf.plan artifact) ...';
+            const changed = process.env.PLAN_CODE === '2';
+            const header = changed
+              ? `### Terraform plan (\`${process.env.TF_ENV}\` / \`${process.env.PLAN_DIR}\`) — changes detected`
+              : `### Terraform plan (\`${process.env.TF_ENV}\` / \`${process.env.PLAN_DIR}\`) — no changes`;
+            const comment = `${marker}\n${header}\n\n<details><summary>plan output</summary>\n\n\`\`\`diff\n${body}\n\`\`\`\n</details>`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: comment });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: comment });
+            }
