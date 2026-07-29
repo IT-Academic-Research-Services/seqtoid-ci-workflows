@@ -50,6 +50,9 @@ on:
       post_comment:
         type: boolean
         default: true
+      deploy_environment:
+        type: string
+        default: ""     # GitHub Environment the job runs under; defaults to "<environment>-plan"
 
 permissions:
   contents: read
@@ -59,6 +62,15 @@ permissions:
 jobs:
   terraform-plan:
     runs-on: ubuntu-latest
+    # Run under a GitHub Environment so the OIDC token's `sub` is
+    # `repo:<org>/<repo>:environment:<env>-plan` instead of `...:pull_request`.
+    # The read-only czid-<env>-gh-actions-plan role DENIES `:pull_request` subjects
+    # (cztack C1 hardening: no PR-triggered code, incl. fork PRs, may assume a cloud
+    # role), so a pull_request-triggered plan can only reach it via an environment sub.
+    # Use a dedicated "<env>-plan" environment (NOT "<env>", which restricts deploys to
+    # main and would block plans on feature branches). Auto-created on first use with no
+    # required reviewers and no branch restriction -- correct for a read-only plan.
+    environment: ${{ inputs.deploy_environment != '' && inputs.deploy_environment || format('{0}-plan', inputs.environment) }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
