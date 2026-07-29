@@ -1,8 +1,8 @@
 name: ci-ssot drift-check
 
 # Keeps the SSOT real over time: asserts every platform repo uses the reusable(s) it's expected to
-# (ci-adoption.yaml) or is a documented exception. Report-only for now; flip DRIFT_STRICT once the
-# adoptions are synced to the repos' default branches. See docs/DESIGN.md.
+# (ci-adoption.yaml) or is a documented exception. ENFORCED (DRIFT_STRICT=true): the 8 adopted gates
+# are live on the manifest's inspected branch (integration); any regression fails this check. See docs/DESIGN.md.
 on:
   schedule:
     - cron: "0 13 * * 1"   # weekly, Monday 13:00 UTC
@@ -21,5 +21,5 @@ jobs:
       - name: Check SSOT adoption across platform repos
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # DRIFT_STRICT: "true"   # enable once adoptions are on default branches
+          DRIFT_STRICT: "true"   # enforce: fail on any adoption drift from ci-adoption.yaml
         run: python3 bin/drift-check.py
