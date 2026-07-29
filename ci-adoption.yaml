@@ -48,5 +48,5 @@ repos:
     security:       .github/workflows/security.yml   # corrected: it already calls security.yml@v1 (was 'no security gates yet')
     status:         "review: canonical WDL CI (wdl-ci, short-read-mngs benchmarks, cargo) — extract to shared reusables (P3)"
   swipe:
-    security:       "review: no security gate — adopt security.yml@v1 (P4)"
-    status:         "review: legacy standalone (checkout@v2, ubuntu-20.04, no resilience) — modernize pins + adopt shared gates, or retire (P4)"
+    security:       "exception: adopted security.yml@v1 on `main` (mirror repo, no integration branch, so outside this integration-branch drift sweep). .gitleaks.toml + .trivyignore baseline inherited findings; hard-fail on NEW."
+    status:         "exception: active pins already modern (publish-image.yml: checkout@v6, ubuntu-22.04); sfn-wdl-ci.yml is a commented stub. Inherited IaC misconfigs baselined — remediation in backlog #294."
