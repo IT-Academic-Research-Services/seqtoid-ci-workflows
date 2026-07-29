@@ -20,23 +20,22 @@ branch: integration            # which branch to inspect (adoptions live on inte
 repos:
 
   # ---------------- Infra (Terraform) ----------------
-  seqtoid-ssot-infra:                      # reference adopter
+  seqtoid-ssot-infra:                      # reference adopter (this IS the former czid-infra, renamed)
     security:       .github/workflows/security.yml
     terraform-ci:   .github/workflows/terraform-ci.yml
+    terraform-plan: "review: DEFERRED — own per-env -gha-tf-apply IAM (isolated accounts), dev backend unwired + apply-path unproven; wire dev backend then adopt terraform-plan.yml. Tracked: Forgejo 874"
   cypherid-web-infra:
     security:       .github/workflows/security.yml
     terraform:      "exception: richer validate-stack.yml (tiered per-component validation) — uniformity would lose function"
-    terraform-plan: "review: has local plan_all/plan_component (manual dispatch, saved-plan->apply) — adopt shared terraform-plan.yml on PR (P0)"
+    terraform-plan: "exception: plan-on-PR via own plan_all (pull_request, dev, dev-plan environment, per-component matrix + secrets); richer than the shared reusable can model"
     regression:     "review: regression-gate pinned @main — standardize to @v1 (P1)"
   cypherid-workflow-infra:
     terraform-ci:   .github/workflows/terraform-ci.yml
     security:       .github/workflows/security.yml   # corrected: it already calls security.yml@v1 (was 'review')
     flake8:         flake8-action
     terraform-plan: "review: has local plan_only (manual dispatch) — adopt shared terraform-plan.yml on PR (P0)"
-  czid-infra:
-    security:       "review: hand-maintained LOCAL copy of the SSOT scanners — adopt security.yml@v1 (P2)"
-    terraform-ci:   "review: local OpenTofu tofu-ci.yml (validate-only) — revert to Terraform + adopt terraform-ci.yml@v1 (P2)"
-    terraform-plan: "review: no plan gate — add shared terraform-plan.yml (P0, after the read-only plan role exists)"
+  # NOTE: 'czid-infra' was listed here in error — it was RENAMED to seqtoid-ssot-infra (above);
+  # one repo, native Terraform (not OpenTofu). Its terraform-plan posture is tracked on that entry.
 
   # ---------------- Application ----------------
   seqtoid-web:                             # reference app pipeline
