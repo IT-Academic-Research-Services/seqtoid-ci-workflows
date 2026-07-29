@@ -8,7 +8,7 @@
 # in CI-V2-AUDIT.md — not enrolled in uniform CI).
 #
 # Per repo, each gate is one of:
-#   <gate>: <path>            -> the repo MUST have a workflow calling thorvath-slower/seqtoid-ci-workflows/<path>@...
+#   <gate>: <path>            -> the repo MUST have a workflow calling IT-Academic-Research-Services/seqtoid-ci-workflows/<path>@...
 #                               (verified by drift-check). e.g. security.yml, terraform-ci.yml, terraform-plan.yml,
 #                               regression-gate.yml, flake8-action.
 #   <gate>: "exception: ..."  -> intentionally kept local (reason required) — recorded, not enforced.
