@@ -101,6 +101,9 @@ jobs:
   job must present an `:environment:<name>` sub instead. The `<env>-plan` environment is auto-created on
   first use with no reviewers and no branch restriction (a read-only plan must run on any feature branch)
   — do NOT point it at `<env>`, whose main-only deploy-branch policy would block plans on PRs.
+- `aws_profile` (optional): if the repo's `.tf` backend/provider blocks pin a named AWS profile (the
+  `idseq-<env>` convention), set it so the assumed OIDC creds are written into that profile for terraform
+  to read. Leave empty when the config uses default/env credentials.
 - `prepare` runs a shell at repo root before init/plan (codegen repos, e.g. chalice `make prepare`).
 - Not in `selftest` (it needs a live backend + role) — validated by the adopting repos' own runs.
 

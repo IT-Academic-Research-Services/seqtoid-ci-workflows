@@ -35,6 +35,10 @@ on:
       aws_region:
         type: string
         default: "us-west-2"
+      aws_profile:
+        type: string
+        default: ""     # if the .tf backend/provider pins a named profile (e.g. idseq-dev),
+                        # write the assumed OIDC creds into it so terraform can read them
       init_args:
         type: string
         default: ""
@@ -104,6 +108,8 @@ jobs:
           role-to-assume: ${{ inputs.role_to_assume != '' && inputs.role_to_assume || format('arn:aws:iam::{0}:role/czid-{1}-gh-actions-plan', vars.AWS_ACCOUNT_ID, inputs.environment) }}
           aws-region: ${{ inputs.aws_region }}
           role-session-name: GitHub_to_AWS_via_FederatedOIDC
+          # Write creds into the named profile the .tf blocks reference (no-op when empty).
+          aws-profile: ${{ inputs.aws_profile }}
 
       - name: Prepare (codegen / setup)
         if: ${{ inputs.prepare != '' }}
