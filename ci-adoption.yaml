@@ -33,7 +33,7 @@ repos:
     terraform-ci:   .github/workflows/terraform-ci.yml
     security:       .github/workflows/security.yml   # corrected: it already calls security.yml@v1 (was 'review')
     flake8:         flake8-action
-    terraform-plan: "review: has local plan_only (manual dispatch) — adopt shared terraform-plan.yml on PR (P0)"
+    terraform-plan: "exception: plan-on-PR via own plan_only (pull_request, dev, dev-plan environment, make package-lambdas codegen + secrets); mirrors cypherid-web-infra (#66)"
   # NOTE: 'czid-infra' was listed here in error — it was RENAMED to seqtoid-ssot-infra (above);
   # one repo, native Terraform (not OpenTofu). Its terraform-plan posture is tracked on that entry.
 
