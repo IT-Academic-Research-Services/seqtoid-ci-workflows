@@ -95,6 +95,15 @@ jobs:
 - Requires the caller repo to have `AWS_ACCOUNT_ID` set as a variable (for the default role ARN) and a
   read-only `czid-<env>-gh-actions-plan` OIDC role trusting the repo. It sets `id-token: write` +
   `pull-requests: write` itself.
+- **Runs under a GitHub Environment** (`<environment>-plan`, e.g. `dev-plan`; override with the
+  `deploy_environment` input). This is required: the read-only plan role denies `:pull_request` OIDC
+  subjects (cztack C1 — no PR-triggered code may assume a cloud role), so on a `pull_request` trigger the
+  job must present an `:environment:<name>` sub instead. The `<env>-plan` environment is auto-created on
+  first use with no reviewers and no branch restriction (a read-only plan must run on any feature branch)
+  — do NOT point it at `<env>`, whose main-only deploy-branch policy would block plans on PRs.
+- `aws_profile` (optional): if the repo's `.tf` backend/provider blocks pin a named AWS profile (the
+  `idseq-<env>` convention), set it so the assumed OIDC creds are written into that profile for terraform
+  to read. Leave empty when the config uses default/env credentials.
 - `prepare` runs a shell at repo root before init/plan (codegen repos, e.g. chalice `make prepare`).
 - Not in `selftest` (it needs a live backend + role) — validated by the adopting repos' own runs.
 
