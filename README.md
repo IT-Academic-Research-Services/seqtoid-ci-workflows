@@ -95,6 +95,7 @@ jobs:
 - Requires the caller repo to have `AWS_ACCOUNT_ID` set as a variable (for the default role ARN) and a
   read-only `czid-<env>-gh-actions-plan` OIDC role trusting the repo. It sets `id-token: write` +
   `pull-requests: write` itself.
+- `prepare` runs a shell at repo root before init/plan (codegen repos, e.g. chalice `make prepare`).
 - Not in `selftest` (it needs a live backend + role) — validated by the adopting repos' own runs.
 
 ## Versioning
