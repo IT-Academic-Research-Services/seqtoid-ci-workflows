@@ -8,7 +8,7 @@ try:
 except ImportError:
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "pyyaml"], check=True); import yaml
 
-ORG, SSOT = "thorvath-slower", "seqtoid-ci-workflows"
+ORG, SSOT = "IT-Academic-Research-Services", "seqtoid-ci-workflows"
 m = yaml.safe_load(open("ci-adoption.yaml"))
 branch = m.get("branch", "main")
 
