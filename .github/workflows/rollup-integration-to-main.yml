@@ -1,0 +1,46 @@
+name: rollup-integration-to-main
+
+# Branching model: humans open PRs against `integration` (the shared integration branch); every merge to
+# integration is rolled up to `main` IMMEDIATELY by this workflow (not on a schedule). main is therefore a
+# protected mirror that ONLY this automation advances, always by fast-forward, so main == integration after
+# each merge. If main ever diverges (a direct push), the fast-forward check fails loudly instead of forcing.
+on:
+  push:
+    branches: [integration]
+
+permissions:
+  contents: write
+
+concurrency:
+  # Serialize roll-ups so two quick merges to integration cannot race the push to main.
+  group: rollup-integration-to-main
+  cancel-in-progress: false
+
+jobs:
+  rollup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # A token that may update the protected `main` branch. The default GITHUB_TOKEN cannot bypass
+          # branch protection, so this is a PAT/GitHub App token (contents:write) added to main's bypass
+          # list. Falls back to GITHUB_TOKEN so the job at least runs + reports if the secret is absent.
+          token: ${{ secrets.ROLLUP_TOKEN || github.token }}
+
+      - name: Fast-forward main to integration
+        run: |
+          set -euo pipefail
+          git fetch origin main integration
+          int_sha="$(git rev-parse origin/integration)"
+          main_sha="$(git rev-parse origin/main)"
+          if [ "$int_sha" = "$main_sha" ]; then
+            echo "main already at integration (${int_sha:0:8}); nothing to roll up."; exit 0
+          fi
+          # Never force: main must be a strict ancestor of integration (integration = main + reviewed work).
+          if ! git merge-base --is-ancestor "$main_sha" "$int_sha"; then
+            echo "::error::main (${main_sha:0:8}) is not an ancestor of integration (${int_sha:0:8}) -- they have diverged. Merge main into integration first, then re-run."
+            exit 1
+          fi
+          git push origin "${int_sha}:refs/heads/main"
+          echo "rolled up integration ${int_sha:0:8} -> main"
