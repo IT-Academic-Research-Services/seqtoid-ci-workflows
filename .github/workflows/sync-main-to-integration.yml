@@ -1,52 +1,112 @@
 name: sync-main-to-integration
 
-# Safety net for the rollup model: `main` is supposed to advance ONLY via rollup-integration-to-main (a
-# fast-forward from integration). If something lands on main DIRECTLY (an accidental merge, a hotfix, an
-# upstream sync), integration would fall behind and every future rollup would fail the ancestor check. This
-# workflow heals that: on any push to main, if integration does not already contain main, it merges main
-# back into integration.
+# Safety net for the rollup model: main should only ever advance via rollup-integration-to-main. If anything
+# lands on main DIRECTLY (a hotfix, an upstream sync), integration falls behind and future rollups stall on
+# the ancestor check. On any push to main this brings integration back up: a lossless fast-forward when
+# integration is strictly behind, otherwise an auto-merge PR that never drops integration's own commits.
+# No-op guards (identical trees / already-contains-main) stop it ping-ponging with the rollup.
 #
-# NO PING-PONG: after a normal rollup, main == integration, so `main is an ancestor of integration` is true
-# and this job exits without pushing. It only pushes when main genuinely has commits integration lacks; once
-# integration absorbs them the next rollup no-ops (main == integration). Both directions are guarded by an
-# ancestry/equality check, so the pair converges instead of looping.
+# One-time prereqs are the same as the rollup: GH_ACTIONS_HELPER app + secrets, and the repo variables
+# TRUNK_SYNC_ENABLED=true and CI_APP_ENABLED=true.
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: sync-main-to-integration
   cancel-in-progress: false
 
 jobs:
-  sync-back:
+  sync:
+    if: ${{ vars.TRUNK_SYNC_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Generate app token
+        id: app_token
+        if: ${{ vars.CI_APP_ENABLED == 'true' }}
+        uses: chanzuckerberg/github-app-token@365b1f2db827eb8f17288ec335b1a7e3c03ff683 # v1.1.4
+        with:
+          app_id: ${{ secrets.GH_ACTIONS_HELPER_APP_ID }}
+          private_key: ${{ secrets.GH_ACTIONS_HELPER_PK }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: integration
-          token: ${{ secrets.ROLLUP_TOKEN || github.token }}
+          token: ${{ steps.app_token.outputs.token || github.token }}
+          persist-credentials: true
 
-      - name: Merge main back into integration (only if integration is missing main's commits)
+      - name: Sync integration up to main
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token || github.token }}
         run: |
           set -euo pipefail
+          git config user.name  "seqtoid-rollup-bot"
+          git config user.email "seqtoid-rollup-bot@users.noreply.github.com"
           git fetch origin main integration
-          main_sha="$(git rev-parse origin/main)"
-          int_sha="$(git rev-parse origin/integration)"
-          # If integration already contains main (the normal post-rollup state), there is nothing to do --
-          # this is the guard that stops the rollup<->sync pair from ping-ponging.
-          if git merge-base --is-ancestor "$main_sha" "$int_sha"; then
-            echo "integration (${int_sha:0:8}) already contains main (${main_sha:0:8}); nothing to sync back."
+
+          # Normal post-rollup state: integration already contains main -- this is the ping-pong guard.
+          if git merge-base --is-ancestor origin/main origin/integration; then
+            echo "integration already contains main -- nothing to do."
             exit 0
           fi
-          echo "::warning::main (${main_sha:0:8}) has commits integration (${int_sha:0:8}) lacks -- likely a direct push to main. Merging back."
-          git config user.name "seqtoid-rollup-bot"
-          git config user.email "seqtoid-rollup-bot@users.noreply.github.com"
-          git checkout -B integration origin/integration
-          git merge --no-edit origin/main
-          git push origin integration
-          echo "merged main -> integration"
+          # main can be ahead only by no-op merge commits (identical trees) -- stop rather than open an empty PR.
+          if git diff --quiet origin/main origin/integration; then
+            echo "main and integration have identical trees -- nothing to sync (no-op)."
+            exit 0
+          fi
+          # integration strictly behind main -> lossless fast-forward (no commits of its own to lose).
+          if git merge-base --is-ancestor origin/integration origin/main; then
+            echo "integration is strictly behind main -- fast-forwarding."
+            if git push origin "origin/main:integration"; then
+              echo "integration fast-forwarded to $(git rev-parse --short origin/main)."
+              exit 0
+            fi
+            echo "::warning::fast-forward push rejected (branch protection). Opening a PR instead."
+          else
+            echo "integration has diverged from main -- opening a merge PR instead of forcing."
+          fi
+
+          # Fallback that never loses work: propose the sync as an auto-merging PR.
+          BRANCH="gitops/sync-integration-$(git rev-parse --short origin/main)"
+          git checkout -B "$BRANCH" origin/integration
+          if ! git merge --no-edit origin/main; then
+            git merge --abort || true
+            echo "::error::main -> integration does not merge cleanly. A human must reconcile it."
+            exit 1
+          fi
+          if git diff --quiet origin/integration "$BRANCH"; then
+            echo "synced branch has no file changes vs integration -- skipping PR (no-op)."
+            exit 0
+          fi
+          # Bot branch regenerated from (integration + main) each run; overwriting is correct, lease keeps it honest.
+          if ! git push --force-with-lease -u origin "$BRANCH"; then
+            echo "::error::could not push $BRANCH even with --force-with-lease; delete it and re-run."
+            exit 1
+          fi
+          gh pr create --base integration --head "$BRANCH" \
+            --title "sync: bring integration up to main" \
+            --body "Automated back-sync: integration was behind main. The content is already on main (reviewed on the way in or an approved direct-to-main change), so no fresh review is required." \
+            || echo "a sync PR may already be open"
+
+          # Self-complete so back-sync PRs converge instead of piling up. A back-sync that did not sync is a
+          # FAILURE and must be red -- the drift (integration behind main) is invisible otherwise.
+          PRNUM="$(gh pr list --head "$BRANCH" --base integration --state open --json number --jq '.[0].number // empty' || true)"
+          if [ -z "$PRNUM" ]; then
+            echo "::error::pushed $BRANCH but no open sync PR into integration exists; integration is still behind main."
+            exit 1
+          fi
+          MERGE_LOG="$(mktemp)"
+          if gh pr merge "$PRNUM" --merge --admin --delete-branch >"$MERGE_LOG" 2>&1 \
+            || gh pr merge "$PRNUM" --merge --auto --delete-branch >>"$MERGE_LOG" 2>&1; then
+            echo "sync PR #$PRNUM merged; integration is up to date with main."
+          else
+            cat "$MERGE_LOG"
+            echo "::error::sync PR #$PRNUM could not be merged; integration is STILL behind main. See output above."
+            exit 1
+          fi
