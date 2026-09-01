@@ -3,8 +3,7 @@
 **Goal:** make `seqtoid-ci-workflows` a *real* single source of truth for cross-repo CI — clean, strong, and
 propagating so that **one edit in the SSOT rolls out everywhere with no downstream change**.
 
-**Status: APPROVED (2026-07-01) — the hybrid model (§2 option C).** This is the authoritative reference doc.
-Implementation epic: #408 (+ children). Prior: #406/#405 (rename/flake8, done), #407 folded into #408.
+**Status: APPROVED -- the hybrid model (section 2, option C).** This is the authoritative reference doc.
 
 ---
 
@@ -12,8 +11,8 @@ Implementation epic: #408 (+ children). Prior: #406/#405 (rename/flake8, done), 
 
 | Gate | Where it lives today | Problem |
 |---|---|---|
-| Security scan (gitleaks/trivy/tflint/checkov) | inline in **seqtoid-web/security-scan.yml** + **czid-infra/security.yml** | 2 full copies; a reusable `security.yml` exists in the SSOT but is unused |
-| Terraform fmt+validate | inline in **cypherid-workflow-infra/validate.yml**, **cypherid-web-infra/terraform_ci.yml**, **czid-infra/terraform-ci.yml** | 3 copies of the same gate; the SSOT reusable `terraform-ci.yml` consolidates them |
+| Security scan (gitleaks/trivy/tflint/checkov) | inline in **seqtoid-web/security-scan.yml** + **seqtoid-ssot-infra/security.yml** | 2 full copies; a reusable `security.yml` exists in the SSOT but is unused |
+| Terraform fmt+validate | inline in **cypherid-workflow-infra/validate.yml**, **cypherid-web-infra/terraform_ci.yml**, **seqtoid-ssot-infra/terraform-ci.yml** | 3 copies of the same gate; the SSOT reusable `terraform-ci.yml` consolidates them |
 | flake8 | **SSOT** (`seqtoid-ci-workflows/flake8-action@v1`) | ✅ the one thing centralized |
 | Richer per-repo gate | **cypherid-web-infra/validate-stack.yml** (internal reusable) | intentional exception (tiered validation) |
 
@@ -27,7 +26,7 @@ This is the crux: "update the SSOT only" (moving ref) vs "strong/secure/reproduc
 | Option | Consumer pins | Rollout | Verdict |
 |---|---|---|---|
 | **A. Moving major tag `@v1`** | `…/security.yml@v1` | move `v1` → instant everywhere | ✅ single-edit, but a mutable ref = trust/repro concern |
-| **B. Immutable `@sha` + Renovate** | `…@<sha>` | Renovate opens N bump PRs | secure/reproducible, but rollout = N downstream PRs (violates "SSOT-only") **and needs Renovate enabled (blocked, CZID-212)** |
+| **B. Immutable `@sha` + Renovate** | `…@<sha>` | Renovate opens N bump PRs | secure/reproducible, but rollout = N downstream PRs (violates "SSOT-only") **and needs Renovate enabled** |
 | **C. HYBRID (recommended)** | `…@v1` (moving) for **our** SSOT | move `v1` → instant | ✅ SSOT-only rollout **and** strong — see below |
 
 ### Recommendation: **Option C — hybrid**
@@ -89,8 +88,8 @@ Callers add a thin wrapper (≤10 lines) per gate, pinned `@v1`.
 ## 6. Rollout plan (order — one verified PR each)
 
 0. **Harden + self-test the SSOT** (§4.1/4.2), SHA-pin its internals, add Renovate config. *(No consumer impact.)*
-1. **SSOT dogfoods itself** — replace czid-infra's inline `security.yml` + `terraform-ci.yml` with thin `@v1`
-   wrappers. Proves the pattern on the repo we control.
+1. **SSOT dogfoods itself** — replace seqtoid-ssot-infra's inline `security.yml` + `terraform-ci.yml` with thin
+   `@v1` wrappers. Proves the pattern on the repo we control.
 2. **cypherid-workflow-infra** — `validate.yml` → `terraform-ci.yml@v1`; normalize `check.yml` triggers.
 3. **seqtoid-web** — `security-scan.yml` → `security.yml@v1` (app-tuned inputs).
 4. **cypherid-web-infra** — keep `validate-stack.yml`; adopt `security.yml@v1` for its security portion; rename
@@ -109,7 +108,7 @@ The current `workflow_dispatch`-only gates (cwi `check.yml`) get proper PR trigg
    zero-downstream rollout); third-party actions/tools are SHA-pinned *inside* the reusables and bumped in the
    one SSOT repo. Not full SHA-pinning of our own SSOT (that would reintroduce downstream churn).
 2. **Renovate → proceed now with manual internal bumps** (still one place); wire Renovate to auto-bump the
-   internal SHA pins once the app is enabled (CZID-212). Not blocked on it.
+   internal SHA pins once the app is enabled. Not blocked on it.
 3. **Exception → yes.** cypherid-web-infra's `validate-stack.yml` stays a richer local gate; its **security**
    portion still calls the reusable `security.yml@v1`. Exceptions are listed in the SSOT README.
 4. **Triggers → normalize.** Dispatch-only gates get real `pull_request` + `push:[main]` + `merge_group`

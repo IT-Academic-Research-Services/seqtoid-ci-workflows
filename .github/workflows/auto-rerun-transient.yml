@@ -11,7 +11,7 @@ name: auto-rerun-transient
 # transient signature (or it died at job setup with no real step output), it re-runs
 # only the failed jobs after a short backoff. Real failures (rspec, tsc, rubocop,
 # brakeman, trivy CVE, terraform error, cargo test, npm ERR) do NOT match and are left
-# failed. Bounded by run_attempt so it can never loop. See platform-overhaul #678.
+# failed. Bounded by run_attempt so it can never loop.
 
 on:
   workflow_run:

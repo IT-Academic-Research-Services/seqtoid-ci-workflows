@@ -5,8 +5,8 @@
 exact file path and in-file location of each. If it's in the "human-maintained" table,
 nothing will remind you — so this list is how we avoid silently drifting.
 
-> ⚠️ **Renovate is configured (`renovate.json`) but the GitHub app is not enabled yet
-> (CZID-212).** Until it is, *everything* in table B is effectively human-maintained too.
+> ⚠️ **Renovate is configured (`renovate.json`) but the GitHub app is not enabled yet.**
+> Until it is, *everything* in table B is effectively human-maintained too.
 
 > ℹ️ **This is a GitHub Action consumed via the moving `@v2` tag.** Its two most
 > important maintenance points (the `@v2` tag and the committed `dist/` bundle) have **no**
@@ -18,7 +18,7 @@ nothing will remind you — so this list is how we avoid silently drifting.
 |---|------|--------------------------------|-----------------|---------------|
 | A1 | **The moving `@v2` major release tag** | Git ref `refs/tags/v2` (not a file); consumers do `uses: …/flake8-action@v2` | Renovate never moves *your own* release tag. This is the SSOT release mechanism: cutting a release = force-moving `v2` (and `v2-node24`) to the new commit | On release: `git tag -f v2 <sha> && git push -f origin v2` (repeat for `v2-node24`). No release workflow exists to do this — consider adding a `RELEASING.md` |
 | A2 | **Committed `dist/index.js` (the bundle the runtime executes)** | `dist/index.js` (git-tracked); `action.yml` → `main: "dist/index.js"` | The Action runtime runs `dist/index.js`, not `index.js`. After any change to `index.js`/`parser.js` or a dependency bump, the bundle must be rebuilt. CI **guards** staleness (`test.yml` job `units` runs `npm run package` then `git diff --exit-code dist/`) but does **not** rebuild/commit it | `npm run package` (`ncc build index.js -o dist`), then commit `dist/`. Skipping it fails CI |
-| A3 | **`runs.using:` Node runtime version** | `action.yml` → `using: "node24"` | Hardcoded string; no manager reads it. This is the point of the fork (node16→node24, CZID-204) | Edit by hand on a runtime migration; keep in lockstep with A4 and the `dist/` rebuild |
+| A3 | **`runs.using:` Node runtime version** | `action.yml` → `using: "node24"` | Hardcoded string; no manager reads it. This is the point of the fork (node16->node24) | Edit by hand on a runtime migration; keep in lockstep with A4 and the `dist/` rebuild |
 | A4 | **Self-test Node version** (must track A3) | `.github/workflows/test.yml` → `node-version: 24` | Plain literal in `with:`; Renovate doesn't bump inline tool-version literals. Must equal `action.yml` `runs.using` | Edit by hand together with A3 |
 | A5 | **Self-test Python version** | `.github/workflows/test.yml` → `python-version: "3.12"` | Literal input to `setup-python`; not a tracked dependency | Edit by hand when bumping the tested Python |
 | A6 | **`@actions/*` toolkit MAJOR upgrades** | `package.json` (`@actions/core`, `@actions/exec`, `@actions/github`); hold rule in `renovate.json` | Renovate is **explicitly disabled** for these majors (they need an ESM migration of `index.js` + ncc rebuild first) | Do the ESM migration, bump, `npm install`, `npm run package`, commit `dist/`; then relax the `renovate.json` hold. Minors/patches still flow via Renovate |
