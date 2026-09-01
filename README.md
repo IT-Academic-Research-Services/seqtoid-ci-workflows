@@ -40,8 +40,7 @@ jobs:
 
 ### `terraform-ci.yml` — reusable Terraform fmt + validate gate
 `terraform fmt -check` + per-stack (or custom) `terraform validate -backend=false` + optional codegen +
-optional per-stack provider-lockfile pin (CZID-30). Pure correctness — no cloud creds / remote state.
-(Converted from the earlier OpenTofu gate — the platform reverted OpenTofu → native Terraform, #370.)
+optional per-stack provider-lockfile pin. Pure correctness -- no cloud creds / remote state.
 
 **Call it from a repo** (`.github/workflows/terraform-ci.yml`):
 
@@ -114,8 +113,8 @@ versions inside the reusable current.
 
 ## Actions
 
-- **`flake8-action/`** — Python flake8 linter action (collapsed in from the standalone
-  `thorvath-slower/flake8-action` repo). Consume as
+- **`flake8-action/`** — Python flake8 linter action (collapsed in from a standalone
+  repo). Consume as
   `uses: IT-Academic-Research-Services/seqtoid-ci-workflows/flake8-action@v1`.
 
 ## Design & policy
