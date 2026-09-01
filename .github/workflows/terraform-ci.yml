@@ -1,18 +1,16 @@
 name: terraform-ci (reusable)
 
-# Reusable Terraform fmt + validate gate — the SSOT for the IaC correctness gate across the platform repos
-# (CZID-310). Callers add a thin wrapper (see README) and pin to a tag (e.g. @v1) so a single change here
+# Reusable Terraform fmt + validate gate — the SSOT for the IaC correctness gate across the platform repos.
+# Callers add a thin wrapper (see README) and pin to a tag (e.g. @v1) so a single change here
 # rolls out to every repo. Pure correctness: validate runs -backend=false, so no cloud creds or remote
 # state are touched — safe on every PR.
-#
-# (Converted from the earlier OpenTofu gate — the platform reverted OpenTofu -> native Terraform, #370.)
 #
 # Inputs let each repo express its shape without forking the gate:
 #   fmt_path          - what to `terraform fmt -check -recursive` (default ".")
 #   stacks            - newline-separated stack dirs; each gets init(-backend=false)+validate (matrix-free)
 #   validate_command  - custom validate, used INSTEAD of `stacks` (e.g. `make validate`, or codegen+root validate)
 #   prepare           - optional shell run before fmt (codegen / env setup)
-#   check_lockfile    - fail if .terraform.lock.hcl drifted during init (provider-pin gate, CZID-30)
+#   check_lockfile    - fail if .terraform.lock.hcl drifted during init (provider-pin gate)
 #   terraform_version      - explicit Terraform version for setup-terraform (default "latest")
 #   terraform_version_file - version file to read when terraform_version is "latest" (default ".terraform-version")
 
@@ -80,7 +78,7 @@ jobs:
         if: ${{ inputs.prepare != '' }}
         shell: bash
         run: ${{ inputs.prepare }}
-      - name: terraform validate (+ optional per-stack lockfile gate, CZID-30)
+      - name: terraform validate (+ optional per-stack lockfile gate)
         shell: bash
         env:
           VALIDATE_COMMAND: ${{ inputs.validate_command }}
@@ -88,7 +86,7 @@ jobs:
           CHECK_LOCKFILE: ${{ inputs.check_lockfile }}
         run: |
           set -euo pipefail
-          # CZID-30: after init, the stack's .terraform.lock.hcl must be committed and unchanged — so provider
+          # After init, the stack's .terraform.lock.hcl must be committed and unchanged — so provider
           # versions stay pinned/reproducible and a broken/malicious provider release can't slip in. Checked
           # per-stack for the `stacks` path, at root for the `validate_command` path.
           check_lock() {

@@ -44,7 +44,7 @@ on:
       harness_repo:
         description: "Repo providing the platform-harness metric library."
         type: string
-        default: "thorvath-slower/seqtoid-ssot-infra"
+        default: "IT-Academic-Research-Services/seqtoid-ssot-infra"
       harness_ref:
         description: "Ref of the harness repo to pin (tag/branch/sha). Pin to a tag once cut."
         type: string

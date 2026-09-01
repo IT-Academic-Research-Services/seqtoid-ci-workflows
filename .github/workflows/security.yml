@@ -1,14 +1,14 @@
 name: security (reusable)
 
 # Reusable security-scanning workflow — the SINGLE SOURCE OF TRUTH for IaC/security gating across the
-# platform repos (CZID-310). Callers add a thin wrapper (see README) so every repo scans identically:
+# platform repos. Callers add a thin wrapper (see README) so every repo scans identically:
 #   - gitleaks : secret scanning over git history (hard-fail on any leak)
 #   - trivy    : vuln + IaC misconfig (hard-fail on HIGH/CRITICAL; per-repo exceptions in .trivyignore).
 #                Secret scanning is gitleaks' job, not trivy's (avoids redundancy + a slow secret-scan hang).
 #   - tflint   : Terraform lint (hard-fail on errors; warnings reported)
 #   - checkov  : deep IaC policy pass — OPT-IN via run_checkov. Report-only (soft-fail).
 # When called, the jobs check out the CALLER's repo, so .trivyignore is read from the caller (per-repo
-# baseline, per CZID-264: accept inherited, hard-fail on NEW). Pin callers to a tag (e.g. @v1).
+# baseline: accept inherited, hard-fail on NEW). Pin callers to a tag (e.g. @v1).
 #
 # `prepare`: an optional caller command run before tflint + checkov (NOT trivy — trivy scans source, and
 # the codegen pulls in build artifacts). Repos whose config is only complete after codegen (e.g. lambda
@@ -35,7 +35,7 @@ on:
       checkov_soft_fail:
         description: >
           Checkov report-only (true, default) vs. a real gate (false -> hard-fail on findings not in
-          checkov_baseline). Flip to false once a repo has a complete .checkov.baseline (CZID-264).
+          checkov_baseline). Flip to false once a repo has a complete .checkov.baseline.
         type: boolean
         default: true
       checkov_baseline:
@@ -64,7 +64,7 @@ jobs:
       - name: Install gitleaks
         run: |
           # 8.30.1: clears a false-positive hashicorp-tf-password on `password_policy = "excellent"`
-          # (the string "excellent" tripped the old rule) surfaced rolling out improvement-#010 (CZID-98).
+          # (the string "excellent" tripped the old rule).
           VER=8.30.1
           curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" | tar -xz gitleaks
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
@@ -116,13 +116,13 @@ jobs:
       - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
         with:
           # Pinned (not `latest`) so the lint gate is reproducible and can't drift
-          # under callers -- this is the SSOT pin for tflint (CZID-140 D8). Renovate
+          # under callers -- this is the SSOT pin for tflint. Renovate
           # bumps it; pull forward, never back.
           tflint_version: v0.63.1
       # setup-tflint installs the binary but NOT the ruleset plugins — `tflint --init` is a required
       # separate step (per the action's docs). Without it a recursive run silently skips any plugin
       # rules (e.g. a caller's aws ruleset in .tflint.hcl) or errors outright: the "tflint module-
-      # resolution" gap from CZID-98. GITHUB_TOKEN avoids the plugin-download rate limit.
+      # resolution" gap. GITHUB_TOKEN avoids the plugin-download rate limit.
       - name: Init TFLint plugins
         run: tflint --init
         env:
@@ -141,7 +141,7 @@ jobs:
       - uses: bridgecrewio/checkov-action@a7683e7b72a04503521247973281ec8142e1ac1f # v12
         with:
           directory: .
-          # SSOT: pin the checkov engine (#425). The action otherwise pip-installs
+          # SSOT: pin the checkov engine. The action otherwise pip-installs
           # the LATEST checkov at run time, so the `.checkov.baseline` gate was
           # non-reproducible — a floating engine finds a different finding set than
           # the version the baseline was built against (version-parity drift).

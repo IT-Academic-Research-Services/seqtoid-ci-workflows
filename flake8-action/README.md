@@ -6,13 +6,12 @@
 
 Run flake8 on your Python code.
 
-> **Maintained fork (thorvath-slower).** Forked from
+> **Maintained fork.** Forked from
 > [`julianwachholz/flake8-action`](https://github.com/julianwachholz/flake8-action),
 > which still ships `runs.using: node16` (past EOL — force-run on a newer Node and
 > being removed from GitHub runners). This fork modernizes the runtime to `node24`
 > so it keeps working after the 2026-09-16 Node-20 removal, without abandoning the
 > action's PR-annotation features. Changes are intentionally **not** sent upstream.
-> Consumers pin this fork by commit SHA. See CZID-204.
 
 ## Usage
 
