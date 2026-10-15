@@ -52,19 +52,19 @@ on:
       runs_on:
         description: "Runner label."
         type: string
-        default: "ubuntu-latest"
+        default: "ubuntu-24.04"
 
 jobs:
   regression:
     runs-on: ${{ inputs.runs_on }}
     steps:
       - name: Checkout caller repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Checkout platform-harness (metric library — single source of truth)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ inputs.harness_repo }}
           ref: ${{ inputs.harness_ref }}
